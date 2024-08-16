@@ -1,0 +1,186 @@
+#include <SoftwareSerial.h>
+#include <Adafruit_Fingerprint.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <WiFi.h>
+#include <FirebaseESP8266.h>
+
+// Firebase configuration
+#define FIREBASE_HOST "smart-voting-1.firebaseio.com"
+#define FIREBASE_AUTH "your_firebase_auth_token"
+
+// Wi-Fi credentials
+#define WIFI_SSID "Lucifer"
+#define WIFI_PASSWORD "Asdfghjkl@1"
+
+// Pin definitions for fingerprint sensor
+#define FINGERPRINT_RX_PIN D6
+#define FINGERPRINT_TX_PIN D7
+
+SoftwareSerial mySerial(FINGERPRINT_RX_PIN, FINGERPRINT_TX_PIN);
+Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+void setup() { 
+  Serial.begin(9600);
+  while (!Serial);
+  delay(100);
+  
+  lcd.begin(); 
+  lcd.clear();
+  lcd.backlight();
+  lcd.print("Sensor Enrollment");
+  
+  finger.begin(57600);
+
+  // Connect to Wi-Fi
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.print("Connecting");
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(500);
+  }
+  Serial.println();
+  Serial.print("Connected: ");
+  Serial.println(WiFi.localIP());
+  
+  // Initialize Firebase
+  Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
+}
+
+void loop() {
+  // Read data from Firebase
+  String voter_name = Firebase.getString("/IOTvoting/name");
+  String enroll = Firebase.getString("/IOTvoting/register");
+  String voting = Firebase.getString("/IOTvoting/voting");
+  String constituency = Firebase.getString("/IOTvoting/constituency");
+  
+  int parties = Firebase.getInt("/IOTvoting/parties");
+  int votes[4][4] = {0}; // Initialize vote matrix
+  int voted[4] = {0}; // Initialize voted array
+  
+  // Handle enrollment state
+  if (enroll == "0") {
+    lcd.clear();
+    lcd.print("WELCOME");
+    delay(2000);
+  }
+  
+  // Handle fingerprint enrollment
+  if (enroll == "1") {
+    lcd.clear();
+    lcd.print("Ready to enroll");
+    lcd.setCursor(0, 1);
+    lcd.print("Fingerprint!");
+
+    int id = finger.templateCount + 1;
+    if (id == 0) return;
+
+    int p = -1;
+    lcd.clear();
+    lcd.print(id);
+    
+    while (p != FINGERPRINT_OK) {
+      p = finger.getImage();
+    }
+    p = finger.image2Tz(1);
+    lcd.clear();
+    lcd.print("Remove finger");
+    delay(1000);
+    
+    p = 0;
+    while (p != FINGERPRINT_NOFINGER) {
+      p = finger.getImage();
+    }
+    
+    p = -1;
+    lcd.clear();
+    lcd.print("Place same finger");
+    while (p != FINGERPRINT_OK) {
+      p = finger.getImage();
+    }
+    p = finger.image2Tz(2);
+    p = finger.createModel();
+    
+    if (p == FINGERPRINT_OK && p != finger.fingerFastSearch()) {
+      lcd.clear();
+      lcd.print("Accepted");
+      p = finger.storeModel(id);
+      Firebase.setString("IOTvoting/id", String(id));
+      Firebase.setString("IOTvoting/register", String(0));
+    } else if (p == FINGERPRINT_ENROLLMISMATCH) {
+      lcd.clear();
+      lcd.print("Fingerprints not match");
+      Firebase.setString("IOTvoting/register", String(0));
+    } else if (p != finger.fingerFastSearch()) {
+      lcd.clear();
+      lcd.print("Already Registered");
+      Firebase.setString("IOTvoting/register", String(0));
+    }
+    lcd.print(id);
+  }
+  
+  // Handle voting state
+  if (enroll == "2") {
+    int p = -1;
+    lcd.clear();
+    lcd.print("Ready to vote");
+    while (p != FINGERPRINT_OK) {
+      p = finger.getImage();
+    }
+    p = finger.image2Tz();
+    lcd.clear();
+    lcd.print("Remove finger");
+    
+    p = finger.fingerFastSearch();
+    
+    if (p == FINGERPRINT_OK && voted[finger.fingerID] != 1) {
+      String constt = Firebase.getString("IOTvoting/" + String(finger.fingerID) + "/const");
+      String namee = Firebase.getString("IOTvoting/" + String(finger.fingerID) + "/name");
+      lcd.clear();
+      lcd.print(namee + " " + constt); 
+      lcd.setCursor(0, 1);
+      lcd.print("Constituency " + constt);
+      delay(1000);
+      
+      int num = 0; // Define and update `num` properly
+      while (num <= 1000) { 
+        lcd.clear();
+        lcd.print("Cast your Vote");
+        // Add logic to cast vote and update `num`
+        num++; // Increment num to eventually exit loop
+      }
+      votes[constt.toInt()][num] += 1; // Update vote count
+      voted[finger.fingerID] = 1; // Mark as voted
+    } else if (voted[finger.fingerID] == 1) {
+      lcd.clear();
+      lcd.print("Already voted");
+      Firebase.setString("IOTvoting/register", String(0));
+    } else if (p != FINGERPRINT_OK) {
+      lcd.clear();
+      lcd.print("Not registered");
+      Firebase.setString("IOTvoting/register", String(0));
+    }
+  }
+  
+  // Handle result update state
+  if (enroll == "3") {
+    Firebase.setString("IOTvoting/const/BHOPAL/AAP", String(votes[1][1]));
+    Firebase.setString("IOTvoting/const/BHOPAL/BJP", String(votes[1][2]));
+    Firebase.setString("IOTvoting/const/BHOPAL/INC", String(votes[1][3]));
+    Firebase.setString("IOTvoting/const/DELHI/AAP", String(votes[2][1]));
+    Firebase.setString("IOTvoting/const/DELHI/BJP", String(votes[2][2]));
+    Firebase.setString("IOTvoting/const/DELHI/INC", String(votes[2][3]));
+    Firebase.setString("IOTvoting/const/JAIPUR/AAP", String(votes[3][1]));
+    Firebase.setString("IOTvoting/const/JAIPUR/BJP", String(votes[3][2]));
+    Firebase.setString("IOTvoting/const/JAIPUR/INC", String(votes[3][3]));
+    Firebase.setString("IOTvoting/register", String(0));
+  }
+  
+  // Handle reset state
+  if (enroll == "4") {
+    memset(voted, 0, sizeof(voted)); // Reset voted array
+    memset(votes, 0, sizeof(votes)); // Reset votes matrix
+    Firebase.setString("IOTvoting/register", String(0)); 
+  }
+}
