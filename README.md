@@ -1,6 +1,6 @@
-# BIOMETRIC VOTING System with Fingerprint Authentication
+# BIOMETRIC VOTING MACHINE with Fingerprint Authentication
 
-This project implements a BIOMETRIC VOTING system using fingerprint authentication. The system integrates with Firebase to manage voter data and voting results, utilizing an `Adafruit Fingerprint Sensor`, an `LCD Display`, and an `ESP8266 Module` for Wi-Fi connectivity.
+This project implements a BIOMETRIC VOTING MACHINE using fingerprint authentication. The system integrates with Firebase to manage voter data and voting results, utilizing an `Adafruit Fingerprint Sensor`, an `LCD Display`, and an `ESP8266 Module` for Wi-Fi connectivity.
 
 ## Features
 
@@ -32,4 +32,4 @@ This project implements a BIOMETRIC VOTING system using fingerprint authenticati
 
 1. **Clone the Repository**:
    ```bash
-   git clone https://github.com/VisheshDixit22/BIOMETRIC-VOTING-system.git
+   git clone https://github.com/VisheshDixit22/BIOMETRIC-VOTING-MACHINE.git
